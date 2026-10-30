@@ -136,6 +136,10 @@
     "openai_no_credits": {
       "title": "OpenAI credits depleted",
       "description": "The OpenAI account used by **{entry_title}** cannot process GPT Realtime requests because it has no credits remaining. [Add credits to the account]({billing_url}), then try GPT Realtime again. This issue will clear automatically after GPT Realtime connects successfully."
+    },
+    "vertex_api_error": {
+      "title": "Gemini Live (Vertex AI) request failed",
+      "description": "Vertex AI rejected a Gemini Live request for **{entry_title}**. Google's error: {error}\n\nCheck the Google Cloud project's Vertex AI API, billing and service account permissions, or use **Reconfigure** on the integration to update the service account key, location or model. This issue will clear automatically after Gemini Live connects successfully."
     }
   }
 }
