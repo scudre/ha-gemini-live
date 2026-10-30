@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Choose a live model provider",
-        "description": "Choose Google Gemini Live, OpenAI GPT Realtime, or QwenCloud Omni Realtime for the Home Assistant voice pipeline.",
+        "description": "Choose Google Gemini Live, Google Vertex AI, OpenAI GPT Realtime, or QwenCloud Omni Realtime for the Home Assistant voice pipeline.",
         "data": {
           "provider": "Provider"
         }
@@ -28,7 +28,9 @@
           "response_timeout": "Response inactivity timeout",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
-          "transcribe_qwen": "Transcribe Qwen"
+          "transcribe_qwen": "Transcribe Qwen",
+          "vertex_key_file": "Service account key (JSON)",
+          "vertex_location": "Location"
         },
         "data_description": {
           "api_key": "Audio, text, Home Assistant tool schemas, and tool results are sent to the selected provider.",
@@ -46,7 +48,9 @@
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use. Select Assist for smart-home control and Memory Management for long-term memory.",
-          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
+          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant.",
+          "vertex_key_file": "Upload the JSON key of a Google Cloud service account with the Vertex AI User role. The project is read from the key. When editing, leave empty to keep the current key.",
+          "vertex_location": "Vertex AI location that serves the live model, for example us, eu, global or a region such as us-central1."
         }
       },
       "reconfigure": {
@@ -68,7 +72,9 @@
           "response_timeout": "Response inactivity timeout",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
-          "transcribe_qwen": "Transcribe Qwen"
+          "transcribe_qwen": "Transcribe Qwen",
+          "vertex_key_file": "Service account key (JSON)",
+          "vertex_location": "Location"
         },
         "data_description": {
           "model": "After a model change, the form may refresh once to show only settings supported by that model.",
@@ -79,9 +85,17 @@
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use.",
-          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
+          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant.",
+          "vertex_key_file": "Upload the JSON key of a Google Cloud service account with the Vertex AI User role. The project is read from the key. When editing, leave empty to keep the current key.",
+          "vertex_location": "Vertex AI location that serves the live model, for example us, eu, global or a region such as us-central1."
         }
       }
+    },
+    "error": {
+      "invalid_key_file": "The uploaded file is not a valid JSON key file.",
+      "not_service_account": "The uploaded JSON is not a service account key. Create a key for a service account in the Google Cloud console.",
+      "missing_key_fields": "The service account key is missing required fields (client_email, private_key, token_uri, project_id).",
+      "cannot_connect": "Could not connect to Vertex AI: {error}"
     },
     "abort": {
       "reconfigure_successful": "The live model was reconfigured successfully."
@@ -108,7 +122,9 @@
           "response_timeout": "Response inactivity timeout",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
-          "transcribe_qwen": "Transcribe Qwen"
+          "transcribe_qwen": "Transcribe Qwen",
+          "vertex_key_file": "Service account key (JSON)",
+          "vertex_location": "Location"
         },
         "data_description": {
           "model": "After a model change, the form may refresh once to show only settings supported by that model.",
@@ -119,9 +135,17 @@
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use. Select Assist for smart-home control and Memory Management for long-term memory.",
-          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
+          "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant.",
+          "vertex_key_file": "Upload the JSON key of a Google Cloud service account with the Vertex AI User role. The project is read from the key. When editing, leave empty to keep the current key.",
+          "vertex_location": "Vertex AI location that serves the live model, for example us, eu, global or a region such as us-central1."
         }
       }
+    },
+    "error": {
+      "invalid_key_file": "The uploaded file is not a valid JSON key file.",
+      "not_service_account": "The uploaded JSON is not a service account key. Create a key for a service account in the Google Cloud console.",
+      "missing_key_fields": "The service account key is missing required fields (client_email, private_key, token_uri, project_id).",
+      "cannot_connect": "Could not connect to Vertex AI: {error}"
     }
   },
   "issues": {
