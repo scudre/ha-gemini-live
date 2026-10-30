@@ -149,3 +149,10 @@ def test_vertex_issue_strings_present_and_files_identical():
     assert issue["title"] == "Gemini Live (Vertex AI) request failed"
     assert "{entry_title}" in issue["description"]
     assert "{error}" in issue["description"]
+
+
+def test_vertex_conversation_event_matches_gemini():
+    assert (
+        conversation.VertexGeminiConversationAgent.conversation_event
+        == conversation.GeminiLiveConversationAgent.conversation_event
+    )

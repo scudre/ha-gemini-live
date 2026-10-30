@@ -646,7 +646,6 @@ class VertexGeminiConversationAgent(GeminiLiveConversationAgent):
     """Handle pipeline handoffs through a Gemini Live session on Vertex AI."""
 
     integration_name = "Gemini Live (Vertex AI)"
-    conversation_event = "vertex_gemini_conversation_entry"
     error_response = "Sorry, I could not get a response from Gemini Live (Vertex AI)."
 
     def _credentials(self, config: dict[str, Any]) -> Any:
