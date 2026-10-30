@@ -156,3 +156,134 @@ def test_vertex_conversation_event_matches_gemini():
         conversation.VertexGeminiConversationAgent.conversation_event
         == conversation.GeminiLiveConversationAgent.conversation_event
     )
+
+
+def _refresh_error():
+    from google.auth.exceptions import RefreshError  # noqa: PLC0415
+
+    return RefreshError(
+        "invalid_grant: Invalid JWT Signature.",
+        {"error": "invalid_grant", "error_description": "Invalid JWT Signature."},
+    )
+
+
+async def test_vertex_voice_turn_reports_revoked_key(monkeypatch, caplog):
+    from homeassistant.components.stt import SpeechResultState  # noqa: PLC0415
+    from test_stt_barge_in import (  # noqa: PLC0415
+        MIC_CHUNK,
+        FakeHass,
+        MicStream,
+        _make_entity,
+        _metadata,
+    )
+
+    hass = FakeHass()
+    entity, manager, turns = _make_entity(
+        hass,
+        {CONF_PROVIDER: PROVIDER_VERTEX, CONF_VERTEX_CREDENTIALS: KEY},
+        stt.VertexGeminiSTT,
+    )
+    issues = []
+    monkeypatch.setattr(
+        "gemini_live.stt.async_create_issue",
+        lambda *args, **kwargs: issues.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        "gemini_live.stt.active_pipeline_context",
+        lambda *_: ("conversation-1", None, None),
+    )
+
+    async def failing_client(*_args, **_kwargs):
+        raise _refresh_error()
+
+    monkeypatch.setattr(stt, "async_create_vertex_gemini_client", failing_client)
+    mic = MicStream()
+    mic.put(MIC_CHUNK)
+    mic.close()
+    result = await entity._async_process_audio_stream_sdk(
+        _metadata(), mic.chunks(), KEY, "m", "v", "", True, False, False
+    )
+
+    assert result.result == SpeechResultState.SUCCESS
+    assert result.text.startswith(VERTEX_RUNTIME_ERROR_PREFIX)
+    assert "invalid_grant" in result.text
+    args, kwargs = issues[0]
+    assert args[2] == "vertex_api_error_test_entry"
+    assert kwargs["translation_key"] == "vertex_api_error"
+    assert turns.take_voice_turn("conversation-1", result.text).complete_conversation
+    assert not manager.should_continue_conversation("conversation-1")
+    assert not any(record.exc_info for record in caplog.records)
+
+
+async def test_vertex_typed_turn_reports_revoked_key(monkeypatch):
+    from test_stt_barge_in import FakeHass, _make_entity  # noqa: PLC0415
+
+    hass = FakeHass()
+    stt_entity, _manager, _ = _make_entity(
+        hass,
+        {
+            CONF_PROVIDER: PROVIDER_VERTEX,
+            CONF_VERTEX_CREDENTIALS: KEY,
+            "model": "m",
+            "voice": "v",
+        },
+        stt.VertexGeminiSTT,
+    )
+    agent = conversation.VertexGeminiConversationAgent(hass, stt_entity.entry)
+    issues = []
+    monkeypatch.setattr(
+        "gemini_live.stt.async_create_issue",
+        lambda *args, **kwargs: issues.append(kwargs),
+    )
+
+    async def failing_client(*_args, **_kwargs):
+        raise _refresh_error()
+
+    async def llm_api(_context):
+        return None, [], "instruction"
+
+    monkeypatch.setattr(
+        conversation, "async_create_vertex_gemini_client", failing_client
+    )
+    agent._async_get_llm_api = llm_api
+    result = await agent._async_process_text_live(
+        "hello", SimpleNamespace(as_llm_context=lambda _: None), "conversation-1"
+    )
+
+    assert result.startswith(VERTEX_RUNTIME_ERROR_PREFIX)
+    assert "invalid_grant" in result
+    assert issues[0]["translation_key"] == "vertex_api_error"
+    assert issues[0]["translation_placeholders"]["error"].startswith("('invalid_grant")
+
+
+def test_vertex_repairs_issue_shows_only_google_text(monkeypatch):
+    created = []
+    monkeypatch.setattr(
+        "gemini_live.stt.async_create_issue",
+        lambda *args, **kwargs: created.append(kwargs),
+    )
+    from google.auth.exceptions import RefreshError  # noqa: PLC0415
+
+    for exc in (
+        APIError(403, {"error": {"message": "Permission denied."}}),
+        RefreshError("Token request failed."),
+    ):
+        created.clear()
+        message = stt.VertexGeminiSTT._api_error_message(exc)
+        stt._report_api_error(
+            SimpleNamespace(), _vertex_entry(), "gemini_live", message
+        )
+        error = created[0]["translation_placeholders"]["error"]
+        assert error == str(exc)
+        assert "Reconfigure" not in error
+        assert ".." not in error
+
+
+async def test_vertex_tts_entity_uses_vertex_name():
+    from gemini_live import tts  # noqa: PLC0415
+
+    (entity,) = await _setup(tts, _vertex_entry())
+    assert type(entity) is tts.VertexGeminiTTS
+    assert entity.name == "Gemini Live (Vertex AI)"
+    (gemini,) = await _setup(tts, _entry())
+    assert type(gemini) is tts.GeminiLiveTTS

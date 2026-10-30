@@ -124,21 +124,47 @@ def _install_fakes(monkeypatch, connect=None):
         types=SimpleNamespace(HttpOptions=_FakeHttpOptions), Client=_FakeClient
     )
 
+    captured["created"] = []
+    captured["refreshes"] = 0
+
+    class _FakeCreds:
+        def __init__(self):
+            self.token = None
+            self.valid = False
+
+        def refresh(self, request):
+            assert isinstance(request, _FakeRequest)
+            captured["refreshes"] += 1
+            self.token = "token"
+            self.valid = True
+
     class _Creds:
         @staticmethod
         def from_service_account_info(info, scopes=None):
             captured["creds_info"] = info
             captured["scopes"] = scopes
-            return "fake-creds"
+            creds = _FakeCreds()
+            captured["created"].append(creds)
+            return creds
+
+    class _FakeRequest:
+        pass
 
     service_account = SimpleNamespace(Credentials=_Creds)
     oauth2 = SimpleNamespace(service_account=service_account)
+    requests = SimpleNamespace(Request=_FakeRequest)
+    transport = SimpleNamespace(requests=requests)
+    auth = SimpleNamespace(transport=transport)
     monkeypatch.setitem(
-        sys.modules, "google", SimpleNamespace(genai=genai, oauth2=oauth2)
+        sys.modules, "google", SimpleNamespace(genai=genai, oauth2=oauth2, auth=auth)
     )
     monkeypatch.setitem(sys.modules, "google.genai", genai)
     monkeypatch.setitem(sys.modules, "google.oauth2", oauth2)
     monkeypatch.setitem(sys.modules, "google.oauth2.service_account", service_account)
+    monkeypatch.setitem(sys.modules, "google.auth", auth)
+    monkeypatch.setitem(sys.modules, "google.auth.transport", transport)
+    monkeypatch.setitem(sys.modules, "google.auth.transport.requests", requests)
+    monkeypatch.setattr(vertex, "_CREDENTIALS_CACHE", {}, raising=False)
     return captured
 
 
@@ -152,10 +178,94 @@ async def test_vertex_client_uses_project_from_key_and_location(monkeypatch):
         "vertexai": True,
         "project": "proj",
         "location": "us",
-        "credentials": "fake-creds",
+        "credentials": captured["created"][0],
         "http_options": None,
     }
     assert captured["scopes"] == ["https://www.googleapis.com/auth/cloud-platform"]
+
+
+async def test_vertex_client_gets_refreshed_credentials(monkeypatch):
+    """The token is fetched in the executor so connect() never refreshes."""
+    captured = _install_fakes(monkeypatch)
+
+    await async_create_vertex_gemini_client(_Hass(), INFO, "us")
+
+    creds = captured["client_kwargs"]["credentials"]
+    assert creds.valid
+    assert creds.token == "token"
+    assert captured["refreshes"] == 1
+
+
+async def test_vertex_credentials_are_cached_and_not_refreshed_while_valid(
+    monkeypatch,
+):
+    captured = _install_fakes(monkeypatch)
+
+    await async_create_vertex_gemini_client(_Hass(), INFO, "us")
+    first = captured["client_kwargs"]["credentials"]
+    await async_create_vertex_gemini_client(_Hass(), INFO, "eu")
+
+    assert captured["client_kwargs"]["credentials"] is first
+    assert len(captured["created"]) == 1
+    assert captured["refreshes"] == 1
+
+    first.valid = False
+    await async_create_vertex_gemini_client(_Hass(), INFO, "us")
+    assert captured["refreshes"] == 2
+
+    await async_create_vertex_gemini_client(
+        _Hass(), {**INFO, "client_email": "other@b"}, "us"
+    )
+    assert len(captured["created"]) == 2
+
+
+async def test_validate_connection_refreshes_before_connecting(monkeypatch):
+    seen = []
+
+    class _CM:
+        async def __aenter__(self):
+            pass
+
+        async def __aexit__(self, *exc):
+            return False
+
+    def connect(**kwargs):
+        seen.append(captured["client_kwargs"]["credentials"].valid)
+        return _CM()
+
+    captured = _install_fakes(monkeypatch, connect)
+
+    assert await async_validate_vertex_connection(_Hass(), INFO, "us", "m") is None
+    assert seen == [True]
+
+
+async def test_validate_connection_times_out_during_token_refresh(monkeypatch):
+    class _SlowHass:
+        async def async_add_executor_job(self, func, *args):
+            await asyncio.sleep(5)
+
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(vertex, "VERTEX_CONNECT_TIMEOUT", 0.01)
+
+    result = await async_validate_vertex_connection(_SlowHass(), INFO, "us", "m")
+
+    assert result == "Timed out after 0.01 seconds connecting to Vertex AI"
+
+
+def test_runtime_message_wraps_google_auth_error():
+    from google.auth import exceptions  # noqa: PLC0415
+
+    refresh_error = exceptions.RefreshError(
+        "invalid_grant: Invalid JWT Signature.", {"error": "invalid_grant"}
+    )
+    try:
+        raise RuntimeError("outer") from refresh_error
+    except RuntimeError as exc:
+        message = vertex_runtime_error_message(exc)
+
+    assert message is not None
+    assert message.startswith(VERTEX_RUNTIME_ERROR_PREFIX)
+    assert "invalid_grant" in message
 
 
 async def test_vertex_client_affective_dialog_uses_v1beta1(monkeypatch):

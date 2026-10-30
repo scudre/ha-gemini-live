@@ -278,8 +278,10 @@ def _report_api_error(
         issue_url = _VERTEX_CONSOLE_URL
         translation_key = "vertex_api_error"
         url_placeholder = None
-        extra_placeholders["error"] = user_message.removeprefix(
-            VERTEX_RUNTIME_ERROR_PREFIX
+        extra_placeholders["error"] = getattr(
+            user_message,
+            "error_detail",
+            user_message.removeprefix(VERTEX_RUNTIME_ERROR_PREFIX),
         )
     elif user_message == _SPENDING_CAP_USER_MESSAGE:
         issue_id = _spending_cap_issue_id(entry.entry_id)
