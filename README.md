@@ -168,7 +168,8 @@ Before installing, you need:
 - A working Home Assistant installation with Assist pipeline support.
 - [HACS](https://www.hacs.xyz/) for the recommended installation method.
 - A Google Gemini API key created in
-  [Google AI Studio](https://aistudio.google.com/app/apikey).
+  [Google AI Studio](https://aistudio.google.com/app/apikey), or a Google Cloud
+  project with Vertex AI (see [Google Vertex AI setup](#google-vertex-ai-setup)).
 - Gemini Live API access in the region and account associated with the key; or
   an OpenAI API key with Realtime API access from the
   [OpenAI platform](https://platform.openai.com/api-keys).
@@ -417,9 +418,14 @@ that Home Assistant does not expose through its Assist LLM API.
 
 ### Authentication, Quota, Or Model Errors
 
-Create or verify the API key in Google AI Studio, check the selected project's
-quota and billing status, and confirm that the configured preview model is
-still available to that account.
+For a Google AI Studio entry, create or verify the API key in Google AI Studio,
+check the selected project's quota and billing status, and confirm that the
+configured preview model is still available to that account.
+
+For a Google Vertex AI entry, check that the service account still has the
+**Vertex AI User** role, that the **Vertex AI API** is enabled and billing is
+active on the project, and that the model is available in the configured
+location. Use **Reconfigure** to upload a new key or change the location or model.
 
 ### Detailed Logging
 

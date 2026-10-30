@@ -11,7 +11,7 @@
       },
       "provider": {
         "title": "Connect to {provider}",
-        "description": "Enter the provider API key and choose how the live model should respond.",
+        "description": "Enter the provider credentials and choose how the live model should respond. Audio, text, Home Assistant tool schemas, and tool results are sent to the selected provider.",
         "data": {
           "api_key": "API key",
           "model": "Live model",
@@ -33,7 +33,7 @@
           "vertex_location": "Location"
         },
         "data_description": {
-          "api_key": "Audio, text, Home Assistant tool schemas, and tool results are sent to the selected provider.",
+          "api_key": "API key for the selected provider.",
           "model": "Realtime audio model used for voice and typed conversations. After a model change, the form may refresh once to show only settings supported by that model.",
           "voice": "Built-in voice used for spoken replies.",
           "system_instruction": "Optional custom personality and behavior. Home Assistant's Assist tool instructions are appended automatically.",
