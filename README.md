@@ -5,7 +5,8 @@
 [![License](https://img.shields.io/github/license/matt123p/ha-gemini-live)](LICENSE)
 
 This custom Home Assistant integration connects the Home Assistant voice pipeline
-directly to Google Gemini Live, OpenAI Realtime, or QwenCloud Omni Realtime.
+directly to Google Gemini Live (through AI Studio or Google Vertex AI), OpenAI
+Realtime, or QwenCloud Omni Realtime.
 
 Doing this has the advantage of reducing the time it takes to reply because the 
 Speech-to-text and the Text-to-speech are done natively by the Live model.
@@ -57,6 +58,37 @@ The shared pipeline talks to a provider-neutral live session contract. Google
 Gemini SDK details live in `gemini.py`, OpenAI WebSocket details in `openai.py`,
 and QwenCloud WebSocket details in `qwen.py`. Provider protocol details stay outside
 the shared STT, conversation, or session-manager code.
+
+## Google Vertex AI setup
+
+Choose **Google Vertex AI** to run Gemini Live against a Google Cloud project
+instead of an AI Studio API key. Usage is billed to the project (postpay), so
+there are no prepaid credits to top up.
+
+1. In the Google Cloud console, enable the **Vertex AI API** for your project.
+2. Create a service account and grant it the **Vertex AI User** role
+   (`roles/aiplatform.user`).
+3. Create a JSON key for the service account and download it.
+4. In Home Assistant, add the integration and choose **Google Vertex AI**. Upload
+   the key under **Service account key (JSON)**, then pick a **Location** (default
+   `us`) and a **Live model** (`gemini-3.8-live` by default, or
+   `gemini-live-2.5-flash-native-audio`). You can also type another location or
+   model from the [supported models table](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/live-api).
+
+The project is read from the key, so there is no project field. Setup connects to
+Vertex AI once when you press Submit; if that fails, the form shows
+"Could not connect to Vertex AI:" followed by Google's own message. The entry is
+titled **Gemini Live (Vertex AI)**.
+
+The key is stored in Home Assistant's config entry storage, like the other API
+keys. To change the key, location, or model, use **Reconfigure**; leave the
+upload empty to keep the current key. If a request fails while the integration is
+running, a Repairs issue named "Gemini Live (Vertex AI) request failed" shows
+Google's message.
+
+Search grounding, tools, and voices work as with Google Gemini, and usage
+(including Search grounding) is billed to the Google Cloud project. Affective
+dialog and thinking level are not shown for the Vertex models listed above.
 
 ## QwenCloud setup
 

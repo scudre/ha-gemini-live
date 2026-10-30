@@ -4,6 +4,12 @@ All notable changes to Gemini Live for Home Assistant are documented here.
 
 ## Unreleased
 
+- Added Google Vertex AI as a provider for Gemini Live: upload a service account
+  JSON key during setup, choose a location and model, and bill usage to a Google
+  Cloud project instead of AI Studio prepaid credits. Setup verifies the
+  connection and shows Google's error verbatim; runtime errors and Repairs issues
+  use Vertex-specific text.
+
 - Added QwenCloud Omni Realtime as a provider for voice and typed conversations,
   streaming audio, Home Assistant function calling, and barge-in. Supports
   Qwen3.8 Omni Flash and Qwen3.5 Omni Plus/Flash Realtime, including the documented
