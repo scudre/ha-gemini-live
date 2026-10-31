@@ -10,6 +10,10 @@ All notable changes to Gemini Live for Home Assistant are documented here.
   connection and shows Google's error verbatim; runtime errors and Repairs issues
   use Vertex-specific text.
 
+- Added a Continue conversation option. Turn it off to answer one request per
+  wake word instead of listening for a follow-up after every reply. Enabled by
+  default, matching the previous behavior.
+
 - Added QwenCloud Omni Realtime as a provider for voice and typed conversations,
   streaming audio, Home Assistant function calling, and barge-in. Supports
   Qwen3.8 Omni Flash and Qwen3.5 Omni Plus/Flash Realtime, including the documented

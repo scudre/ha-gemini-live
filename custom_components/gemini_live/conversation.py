@@ -20,6 +20,7 @@ from .vertex import async_create_vertex_gemini_client, vertex_runtime_error_mess
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
+    CONF_CONTINUE_CONVERSATION,
     CONF_AFFECTIVE_DIALOG,
     CONF_ENCOURAGE_WEB_SEARCH,
     CONF_ENABLE_SOUND_RESPONSES,
@@ -34,6 +35,7 @@ from .const import (
     CONF_VERTEX_LOCATION,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
+    DEFAULT_CONTINUE_CONVERSATION,
     DEFAULT_SYSTEM_INSTRUCTION,
     DEFAULT_THINKING_LEVEL,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
@@ -611,11 +613,15 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         intent_response = IntentResponse(language=language)
         intent_response.async_set_speech(assistant_text)
 
+        follow_up_enabled = {**self.entry.data, **self.entry.options}.get(
+            CONF_CONTINUE_CONVERSATION, DEFAULT_CONTINUE_CONVERSATION
+        )
         return conversation.ConversationResult(
             response=intent_response,
             conversation_id=conversation_id,
             continue_conversation=(
-                session_manager.should_continue_conversation(conversation_id)
+                follow_up_enabled
+                and session_manager.should_continue_conversation(conversation_id)
             ),
         )
 
