@@ -1,5 +1,17 @@
 # Gemini Live, GPT Realtime, and Qwen Realtime for Home Assistant
 
+> **Fork note.** This is a fork of
+> [matt123p/ha-gemini-live](https://github.com/matt123p/ha-gemini-live) that adds a
+> **Google Vertex AI** provider. AI Studio keys now need prepaid billing; Vertex AI
+> bills postpay to a Google Cloud project. Pick **Google Vertex AI** as the provider
+> and upload a service account JSON key (see
+> [Google Vertex AI setup](#google-vertex-ai-setup)).
+>
+> Install through HACS as a custom repository:
+> `https://github.com/scudre/ha-gemini-live` (type: Integration). Don't install the
+> upstream integration alongside it; both use the `gemini_live` domain. The change is
+> offered upstream from the `vertex-ai-provider` branch.
+
 [![HACS validation](https://img.shields.io/github/actions/workflow/status/matt123p/ha-gemini-live/validate.yml?branch=main&label=HACS%20validation)](https://github.com/matt123p/ha-gemini-live/actions/workflows/validate.yml)
 [![GitHub release](https://img.shields.io/github/v/release/matt123p/ha-gemini-live)](https://github.com/matt123p/ha-gemini-live/releases)
 [![License](https://img.shields.io/github/license/matt123p/ha-gemini-live)](LICENSE)
