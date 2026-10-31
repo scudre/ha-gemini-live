@@ -1,24 +1,3 @@
-> **Fork note:** This is a fork of [matt123p/ha-gemini-live](https://github.com/matt123p/ha-gemini-live)
-> that adds **Vertex AI (Agent Platform)** support for the Google Gemini provider.
->
-> **Why:** Upstream only accepts an AI Studio API key, and AI Studio now requires prepaid
-> billing. Vertex AI is postpay and serves `gemini-3.8-live` (GA), so routing Gemini Live
-> through Vertex avoids the prepaid requirement.
->
-> **What changed:** Only `async_create_gemini_client()` in
-> `custom_components/gemini_live/gemini.py`. If the API key field starts with `vertex:`, the
-> integration authenticates with a service account and creates a Vertex client instead:
->
-> ```
-> vertex:<project-id>:<location>:<path-to-service-account.json>
-> e.g. vertex:my-project:us:/config/vertex-key.json
-> ```
->
-> The service account needs the Agent Platform User role (`roles/aiplatform.user`), and the
-> path is the path inside the Home Assistant container. Pick a live model that Vertex serves
-> (e.g. `gemini-3.8-live`). Affective dialog uses `v1beta1` on Vertex. Any other API key
-> value works exactly as upstream.
-
 # Gemini Live, GPT Realtime, and Qwen Realtime for Home Assistant
 
 [![HACS validation](https://img.shields.io/github/actions/workflow/status/matt123p/ha-gemini-live/validate.yml?branch=main&label=HACS%20validation)](https://github.com/matt123p/ha-gemini-live/actions/workflows/validate.yml)
