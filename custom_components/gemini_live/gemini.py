@@ -48,62 +48,16 @@ async def async_create_gemini_client(
     from google.genai import types  # noqa: PLC0415
     from google import genai  # noqa: PLC0415
 
-    vertex = _parse_vertex_key(api_key)
-
     http_options = None
     if affective_dialog:
-        # Affective dialog is only accepted on the beta endpoint; newer SDK
+        # Affective dialog is only accepted on the v1beta endpoint; newer SDK
         # default versions reject it with "Request contains an invalid
-        # argument" (websocket close 1007). Vertex calls it v1beta1.
-        http_options = types.HttpOptions(
-            api_version="v1beta1" if vertex else "v1beta"
-        )
-
-    if vertex:
-        project, location, credentials_path = vertex
-
-        def _make_vertex_client() -> Any:
-            from google.oauth2 import service_account  # noqa: PLC0415
-
-            credentials = service_account.Credentials.from_service_account_file(
-                credentials_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"],
-            )
-            return genai.Client(
-                vertexai=True,
-                project=project,
-                location=location,
-                credentials=credentials,
-                http_options=http_options,
-            )
-
-        client = await hass.async_add_executor_job(_make_vertex_client)
-    else:
-        client = await hass.async_add_executor_job(
-            lambda: genai.Client(api_key=api_key, http_options=http_options)
-        )
+        # argument" (websocket close 1007).
+        http_options = types.HttpOptions(api_version="v1beta")
+    client = await hass.async_add_executor_job(
+        lambda: genai.Client(api_key=api_key, http_options=http_options)
+    )
     return GeminiLiveClient(client)
-
-
-# Vertex AI (Agent Platform) support, local patch.
-# Enter this in the "API key" field instead of an AI Studio key:
-#   vertex:<project-id>:<location>:<path-to-service-account.json>
-# e.g. vertex:my-project:us:/config/vertex-key.json
-_VERTEX_PREFIX = "vertex:"
-
-
-def _parse_vertex_key(api_key: str) -> tuple[str, str, str] | None:
-    """Return (project, location, credentials_path) for a vertex: key."""
-    if not api_key or not api_key.strip().lower().startswith(_VERTEX_PREFIX):
-        return None
-    parts = api_key.strip()[len(_VERTEX_PREFIX):].split(":", 2)
-    if len(parts) != 3 or not all(p.strip() for p in parts):
-        raise ValueError(
-            "Vertex key must look like "
-            "vertex:<project-id>:<location>:<path-to-service-account.json>"
-        )
-    project, location, credentials_path = (p.strip() for p in parts)
-    return project, location, credentials_path
 
 
 class GeminiLiveClient:
