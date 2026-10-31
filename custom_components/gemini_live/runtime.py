@@ -55,8 +55,10 @@ class AudioStream:
         self,
         on_cancel: Callable[[], None] | None = None,
         max_buffer_bytes: int = AUDIO_STREAM_MAX_BUFFER_BYTES,
+        sample_rate: int = 16000,
     ) -> None:
         """Initialize an audio stream."""
+        self.sample_rate = sample_rate
         self._queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._finished = False
         self._on_cancel = on_cancel

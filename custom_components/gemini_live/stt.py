@@ -100,6 +100,8 @@ from .runtime import (
 )
 from .utils import (
     PCM24kTo16kStreamResampler,
+    PCMPassthrough,
+    resample_16k_to_24k,
     set_detailed_logging,
 )
 
@@ -788,16 +790,20 @@ class LiveModelSTT(SpeechToTextEntity):
         last_response_activity = time.monotonic()
         gemini_replied = asyncio.Event()
         first_audio = asyncio.Event()
-        input_transcript_received = asyncio.Event()
         stream_chunk_size = (
             BARGE_IN_STREAM_CHUNK_SIZE
             if support_barge_in
             else OPTIMAL_STREAM_CHUNK_SIZE
         )
+        # Barge-in playback needs 16 kHz. Otherwise pass the provider's native
+        # 24 kHz audio straight through and let Home Assistant convert it.
         response_audio_stream = AudioStream(
-            lambda: session_manager.cancel_conversation(self.hass, conversation_id)
+            lambda: session_manager.cancel_conversation(self.hass, conversation_id),
+            sample_rate=16000 if support_barge_in else 24000,
         )
-        response_audio_resampler = PCM24kTo16kStreamResampler()
+        response_audio_resampler = (
+            PCM24kTo16kStreamResampler() if support_barge_in else PCMPassthrough()
+        )
         response_text_stream = TextStream() if transcribe_output else None
 
         # The placeholder must carry the turn id: Home Assistant caches TTS
@@ -1047,6 +1053,8 @@ class LiveModelSTT(SpeechToTextEntity):
                                         pcm, tool_result = await async_sound_response(
                                             tool_args
                                         )
+                                        if pcm and not support_barge_in:
+                                            pcm = resample_16k_to_24k(pcm)
                                         if pcm:
                                             session_manager.complete_conversation(
                                                 conversation_id
@@ -1181,7 +1189,6 @@ class LiveModelSTT(SpeechToTextEntity):
                                 len(transcription),
                             )
                             input_transcript_parts.append(transcription)
-                            input_transcript_received.set()
                             _LOGGER.warning(
                                 "[turn=%s] inputTranscription text len=%d text=%r",
                                 turn_id,
@@ -1276,14 +1283,6 @@ class LiveModelSTT(SpeechToTextEntity):
                     # until the response inactivity timeout. The model's audio
                     # can safely queue in AudioStream while external VAD finishes.
                     await send_task
-                if not input_transcript_parts:
-                    try:
-                        await asyncio.wait_for(
-                            input_transcript_received.wait(),
-                            timeout=0.5,
-                        )
-                    except TimeoutError:
-                        pass
 
                 user_text = (
                     "".join(input_transcript_parts).strip() or fallback_user_text

@@ -194,7 +194,7 @@ class GeminiLiveTTS(TextToSpeechEntity):
                         on_audio_interrupt
                     )
                 try:
-                    yield streaming_wav_header()
+                    yield streaming_wav_header(audio.sample_rate)
                     async with aclosing(audio.async_chunks()) as chunks:
                         async for chunk in chunks:
                             yield chunk

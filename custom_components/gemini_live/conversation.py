@@ -18,6 +18,7 @@ from homeassistant.helpers.intent import IntentResponse
 from .gemini import GeminiLiveClient, async_create_gemini_client
 from .vertex import async_create_vertex_gemini_client, vertex_runtime_error_message
 from .live import LiveConfig, LiveTool, LiveToolResponse
+from .compat import supports_tts_interruption
 from .const import (
     CONF_API_KEY,
     CONF_CONTINUE_CONVERSATION,
@@ -27,6 +28,7 @@ from .const import (
     CONF_MODEL,
     CONF_PROVIDER,
     CONF_SEARCH_GROUNDING,
+    CONF_SUPPORT_BARGE_IN,
     CONF_SYSTEM_INSTRUCTION,
     CONF_THINKING_LEVEL,
     CONF_TRANSCRIBE_GEMINI,
@@ -330,6 +332,10 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         text_response_parts: list[str] = []
         audio_response_chunks: list[bytes] = []
         resampled_pcm_chunks: list[bytes] = []
+        # Barge-in playback needs 16 kHz; otherwise keep the native 24 kHz audio.
+        downsample = (
+            bool(config.get(CONF_SUPPORT_BARGE_IN)) and supports_tts_interruption()
+        )
         wav_data = b""
         sound_selected = False
         sound_responses_enabled = bool(
@@ -442,13 +448,19 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                             text_response_parts.append(response.text)
                         if response.audio and not sound_selected:
                             audio_response_chunks.append(response.audio)
-                            resampled_pcm_chunks.append(
-                                resample_24k_to_16k(response.audio)
-                            )
-                            wav_data = pcm_to_wav(
-                                b"".join(resampled_pcm_chunks),
-                                16000,
-                            )
+                            if downsample:
+                                resampled_pcm_chunks.append(
+                                    resample_24k_to_16k(response.audio)
+                                )
+                                wav_data = pcm_to_wav(
+                                    b"".join(resampled_pcm_chunks),
+                                    16000,
+                                )
+                            else:
+                                wav_data = pcm_to_wav(
+                                    b"".join(audio_response_chunks),
+                                    24000,
+                                )
                         if response.output_transcript and not sound_selected:
                             text_response_parts.append(response.output_transcript)
 

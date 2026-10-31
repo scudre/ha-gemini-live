@@ -93,6 +93,21 @@ class PCM24kTo16kStreamResampler:
         self._pending = b""
 
 
+class PCMPassthrough:
+    """Forward native 24 kHz PCM unchanged; same interface as the resampler."""
+
+    def process(self, data: bytes) -> bytes:
+        """Return the chunk unchanged."""
+        return data
+
+    def flush(self) -> bytes:
+        """Nothing is held back."""
+        return b""
+
+    def reset(self) -> None:
+        """Nothing to discard."""
+
+
 def resample_16k_to_24k(data: bytes) -> bytes:
     """Resample raw 16-bit signed PCM mono audio from 16kHz to 24kHz."""
     num_samples = len(data) // 2
