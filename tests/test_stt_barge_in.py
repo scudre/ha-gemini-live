@@ -31,7 +31,11 @@ from gemini_live.stt import (
     GPTRealtimeSTT,
     _add_search_tool_instruction,
 )
-from gemini_live.utils import PCM24kTo16kStreamResampler, resample_24k_to_16k
+from gemini_live.utils import (
+    PCM24kTo16kStreamResampler,
+    resample_16k_to_24k,
+    resample_24k_to_16k,
+)
 from homeassistant.components.stt import (
     AudioBitRates,
     AudioChannels,
@@ -404,9 +408,13 @@ async def test_sound_tool_plays_cue_without_model_speech(
             return b"".join([chunk async for chunk in turn.audio.async_chunks()])
 
         consumer = asyncio.create_task(consume())
-        expected_audio = (
-            load_sound_pcm() if enabled else resample_24k_to_16k(AUDIO_A)
-        )
+        # Barge-in playback is 16 kHz; otherwise output stays at native 24 kHz.
+        if enabled:
+            expected_audio = (
+                load_sound_pcm() if barge_in else resample_16k_to_24k(load_sound_pcm())
+            )
+        else:
+            expected_audio = resample_24k_to_16k(AUDIO_A) if barge_in else AUDIO_A
         assert await asyncio.wait_for(consumer, 5) == expected_audio
         if transcribe_output:
             assert turn.assistant_text_stream.text == (
@@ -497,9 +505,7 @@ async def test_typed_sound_response_and_invalid_sound_fallback(
             assert session.tool_responses[0].response["success"]
         else:
             assert response == "Fallback speech"
-            assert turns.take_audio(response) == pcm_to_wav(
-                resample_24k_to_16k(AUDIO_A)
-            )
+            assert turns.take_audio(response) == pcm_to_wav(AUDIO_A, 24000)
             assert "error" in session.tool_responses[0].response
         assert (
             manager.should_continue_conversation("conversation-1")
@@ -710,7 +716,8 @@ async def test_non_barge_in_keeps_forwarding_until_external_vad_closes_stream(
     turn = turn_store.take_voice_turn("conversation-1", result.text)
     assert turn is not None
     chunks = [chunk async for chunk in turn.audio.async_chunks()]
-    assert chunks == [resample_24k_to_16k(AUDIO_A)]
+    assert chunks == [AUDIO_A]
+    assert turn.audio.sample_rate == 24000
     assert "transcript" not in turn.assistant_text
     assert scripted_client.captured_config.support_barge_in is False
     assert scripted_client.captured_config.transcribe_output is False
