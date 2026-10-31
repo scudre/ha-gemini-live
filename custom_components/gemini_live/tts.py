@@ -202,7 +202,7 @@ class GeminiLiveTTS(TextToSpeechEntity):
             message += "".join([chunk async for chunk in request.message_gen])
             audio = turn_store.take_audio(message)
         if audio is None and self._should_speak(message):
-            _LOGGER.debug(
+            _LOGGER.warning(
                 "TTS: async_stream_tts_audio called | message=%r | streaming=gemini_tts",
                 message[:80],
             )
