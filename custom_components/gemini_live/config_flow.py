@@ -27,6 +27,7 @@ from .const import (
     CONF_SYSTEM_INSTRUCTION,
     CONF_THINKING_LEVEL,
     CONF_TRANSCRIBE_GEMINI,
+    CONF_TTS_MODEL,
     CONF_TRANSCRIBE_GPT,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
@@ -39,6 +40,7 @@ from .const import (
     DEFAULT_SUPPORT_BARGE_IN,
     DEFAULT_THINKING_LEVEL,
     DEFAULT_TRANSCRIBE_GEMINI,
+    DEFAULT_TTS_MODEL,
     DEFAULT_TRANSCRIBE_GPT,
     DEFAULT_VOICE,
     DOMAIN,
@@ -71,6 +73,7 @@ from .const import (
     VERTEX_DEFAULT_MODEL,
     VERTEX_LOCATIONS,
     is_google_provider,
+    TTS_MODELS,
     supports_affective_dialog,
     supports_thinking_level,
 )
@@ -326,6 +329,18 @@ def _provider_schema(
                 ),
             )
         ] = selector.BooleanSelector()
+        fields[
+            vol.Optional(
+                CONF_TTS_MODEL,
+                default=current.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL),
+            )
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=TTS_MODELS,
+                custom_value=True,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
     elif is_openai:
         fields[
             vol.Optional(

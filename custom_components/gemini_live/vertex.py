@@ -19,6 +19,8 @@ _VERTEX_RUNTIME_ADVICE = (
 )
 
 _CREDENTIALS_CACHE: dict[tuple[str, str], Any] = {}
+# Locations that serve the Gemini TTS models.
+VERTEX_TTS_LOCATIONS = ("global", "us", "eu")
 _CREDENTIALS_LOCK = threading.Lock()
 
 
@@ -51,6 +53,25 @@ def parse_service_account_key(raw: bytes | str) -> dict[str, Any]:
     return data
 
 
+def _credentials_cache_key(credentials_info: dict[str, Any]) -> tuple[str, str]:
+    """Identify one service-account key in the credentials cache."""
+    return (
+        credentials_info["client_email"],
+        credentials_info.get("private_key_id", ""),
+    )
+
+
+def vertex_credentials_valid(credentials_info: dict[str, Any]) -> bool:
+    """Return whether the cached credentials hold a valid token; non-blocking."""
+    credentials = _CREDENTIALS_CACHE.get(_credentials_cache_key(credentials_info))
+    return credentials is not None and credentials.valid
+
+
+def vertex_tts_location(location: str) -> str:
+    """Return a location serving Gemini TTS: the entry's multi-region, else global."""
+    return location if location in VERTEX_TTS_LOCATIONS else "global"
+
+
 def _refreshed_credentials(credentials_info: dict[str, Any]) -> Any:
     """Return cached service-account credentials holding a valid token.
 
@@ -60,10 +81,7 @@ def _refreshed_credentials(credentials_info: dict[str, Any]) -> Any:
     from google.auth.transport.requests import Request  # noqa: PLC0415
     from google.oauth2 import service_account  # noqa: PLC0415
 
-    cache_key = (
-        credentials_info["client_email"],
-        credentials_info.get("private_key_id", ""),
-    )
+    cache_key = _credentials_cache_key(credentials_info)
     with _CREDENTIALS_LOCK:
         credentials = _CREDENTIALS_CACHE.get(cache_key)
         if credentials is None:

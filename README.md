@@ -146,7 +146,7 @@ Gemini Live can be used side-by-side with the official integration.
 | Home control | Calls the Home Assistant Assist LLM API tools | Can control Home Assistant through configured LLM APIs |
 | Barge-in | Experimental; supported with the required Home Assistant Core interrupt path and a compatible full-duplex satellite | Not provided by the integration |
 | Typed conversation | Supported (but not recommended - use the offical Gemini integration instead) | Supported |
-| Standalone TTS | Not supported - Use the offical Gemini integration instead | Supported with `tts.speak`, including voice options |
+| Standalone TTS | Gemini only: text without Live audio, such as locally handled commands or `tts.speak`, is read aloud with a Gemini TTS model in the configured voice | Supported with `tts.speak`, including voice options |
 | Image/PDF analysis | Not supported - Use the offical Gemini integration instead | Supported by the `generate_content` action |
 | Google Search option | Native Live API Search grounding, enabled per entry | Google Search support for its configured conversation models |
 | Model stability | Includes stable Gemini 3.8 Live models and legacy preview models | Offers the models and settings supported by Home Assistant Core |
@@ -273,6 +273,7 @@ upgrade to the latest version.
 | Support barge-in | Experimental: keeps microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires the Home Assistant Core interrupt path and a compatible full-duplex voice client or satellite. Disabled by default. |
 | Response inactivity timeout | Closes and discards a live provider session after 15–120 seconds without response activity. Defaults to 30 seconds. This does not change Home Assistant's external-VAD listening timeout. |
 | Continue conversation | After each reply, keeps listening for a follow-up without the wake word. Saying goodbye or asking to stop listening still ends the conversation. Turn off to answer one request per wake word. Enabled by default. |
+| Text-to-speech model | Gemini only. Gemini TTS model that reads aloud text without Live audio, such as replies to commands Home Assistant handles locally or `tts.speak` calls. Defaults to `gemini-3.8-flash-lite-tts`, the fastest. |
 
 For most assistants, choose **Gemini 3.8 Live**: it is optimized for immediate,
 low-latency conversation and direct smart-home commands. Choose **Gemini 3.8
