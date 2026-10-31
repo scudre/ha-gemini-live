@@ -17,6 +17,7 @@ CONF_THINKING_LEVEL = "thinking_level"
 CONF_SUPPORT_BARGE_IN = "support_barge_in"
 CONF_AFFECTIVE_DIALOG = "affective_dialog"
 CONF_RESPONSE_TIMEOUT = "response_timeout"
+CONF_TTS_MODEL = "tts_model"
 
 DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 DEFAULT_VOICE = "Puck"
@@ -29,6 +30,14 @@ DEFAULT_THINKING_LEVEL = "low"
 DEFAULT_SUPPORT_BARGE_IN = False
 DEFAULT_AFFECTIVE_DIALOG = False
 DEFAULT_RESPONSE_TIMEOUT = 30
+# Gemini TTS models that read text aloud word for word, used for replies that
+# did not come from Gemini Live, such as commands Home Assistant handled locally.
+DEFAULT_TTS_MODEL = "gemini-3.8-flash-lite-tts"
+TTS_MODELS = [
+    "gemini-3.8-flash-lite-tts",
+    "gemini-3.8-flash-tts",
+    "gemini-3.1-flash-tts-preview",
+]
 MIN_RESPONSE_TIMEOUT = 15
 MAX_RESPONSE_TIMEOUT = 120
 PROVIDER_GEMINI = "gemini"

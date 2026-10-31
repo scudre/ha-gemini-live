@@ -4,6 +4,11 @@ All notable changes to Gemini Live for Home Assistant are documented here.
 
 ## Unreleased
 
+- Read aloud text that has no Gemini Live audio, such as replies to commands
+  Home Assistant handles locally or `tts.speak` calls, with a Gemini TTS model
+  in the configured voice instead of playing silence. Adds a Text-to-speech
+  model option, defaulting to Gemini 3.8 Flash-Lite TTS.
+
 - Play the live model's native 24 kHz audio instead of downsampling every
   reply to 16 kHz, which made voices duller and harsher. Audio is still
   converted to 16 kHz when barge-in is enabled. Voice replies also no longer

@@ -41,6 +41,34 @@ def _uses_async_function_calling(model: str | None) -> bool:
     return model.startswith(_ASYNC_FUNCTION_CALLING_MODEL_PREFIXES)
 
 
+async def async_stream_gemini_tts(
+    client: Any, model: str, text: str, voice: str
+) -> AsyncIterator[bytes]:
+    """Read text aloud word for word with a Gemini TTS model, streaming 24 kHz PCM.
+
+    Used when the pipeline hands TTS text that did not come from Gemini Live,
+    such as replies to commands Home Assistant handled locally. Streamed
+    chunks are headerless 24 kHz mono PCM16, the same format as Live audio.
+    """
+    from google.genai import types  # noqa: PLC0415
+
+    config = types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+            )
+        ),
+    )
+    async for chunk in await client.aio.models.generate_content_stream(
+        model=model, contents=text, config=config
+    ):
+        for candidate in chunk.candidates or ():
+            for part in (candidate.content and candidate.content.parts) or ():
+                if part.inline_data and part.inline_data.data:
+                    yield part.inline_data.data
+
+
 async def async_create_gemini_client(
     hass: Any, api_key: str, affective_dialog: bool = False
 ) -> GeminiLiveClient:

@@ -26,6 +26,7 @@
           "thinking_level": "Thinking level",
           "support_barge_in": "Support barge-in",
           "response_timeout": "Response inactivity timeout",
+          "tts_model": "Text-to-speech model",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
           "transcribe_qwen": "Transcribe Qwen"
@@ -44,6 +45,7 @@
           "thinking_level": "Controls how much background reasoning Gemini 3.8 Live Extended Thinking uses. Higher levels can improve complex answers but may increase latency and cost.",
           "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage.",
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
+          "tts_model": "Gemini text-to-speech model that reads aloud replies not produced by Gemini Live, such as commands Home Assistant handles locally. Flash-Lite is the fastest.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use. Select Assist for smart-home control and Memory Management for long-term memory.",
           "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
@@ -66,6 +68,7 @@
           "thinking_level": "Thinking level",
           "support_barge_in": "Support barge-in",
           "response_timeout": "Response inactivity timeout",
+          "tts_model": "Text-to-speech model",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
           "transcribe_qwen": "Transcribe Qwen"
@@ -77,6 +80,7 @@
           "thinking_level": "Controls how much background reasoning Gemini 3.8 Live Extended Thinking uses. Higher levels can improve complex answers but may increase latency and cost.",
           "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage.",
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
+          "tts_model": "Gemini text-to-speech model that reads aloud replies not produced by Gemini Live, such as commands Home Assistant handles locally. Flash-Lite is the fastest.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use.",
           "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
@@ -106,6 +110,7 @@
           "thinking_level": "Thinking level",
           "support_barge_in": "Support barge-in",
           "response_timeout": "Response inactivity timeout",
+          "tts_model": "Text-to-speech model",
           "affective_dialog": "Affective dialog",
           "llm_hass_api": "LLM APIs",
           "transcribe_qwen": "Transcribe Qwen"
@@ -117,6 +122,7 @@
           "thinking_level": "Controls how much background reasoning Gemini 3.8 Live Extended Thinking uses. Higher levels can improve complex answers but may increase latency and cost.",
           "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage.",
           "response_timeout": "Seconds without any provider response activity before the live session is discarded. Increase this for slow models or long-running tool calls. This does not change Home Assistant's external-VAD listening timeout.",
+          "tts_model": "Gemini text-to-speech model that reads aloud replies not produced by Gemini Live, such as commands Home Assistant handles locally. Flash-Lite is the fastest.",
           "affective_dialog": "Let the model pick up on the tone and emotion in your voice and adapt its own speaking style to match, so replies sound more empathetic and natural. Only available on Gemini 2.5 Flash Native Audio Preview (12-2025).",
           "llm_hass_api": "Choose the Home Assistant LLM APIs whose tools the live model may use. Select Assist for smart-home control and Memory Management for long-term memory.",
           "transcribe_qwen": "Stream the spoken-response transcript from Qwen into Home Assistant."
