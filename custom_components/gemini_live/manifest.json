@@ -4,6 +4,7 @@
   "after_dependencies": ["assist_pipeline"],
   "codeowners": ["@matt123p"],
   "config_flow": true,
+  "dependencies": ["file_upload"],
   "documentation": "https://github.com/matt123p/ha-gemini-live",
   "integration_type": "service",
   "iot_class": "cloud_push",

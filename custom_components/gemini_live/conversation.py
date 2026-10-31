@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.intent import IntentResponse
 
 from .gemini import GeminiLiveClient, async_create_gemini_client
+from .vertex import async_create_vertex_gemini_client, vertex_runtime_error_message
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
@@ -29,6 +30,8 @@ from .const import (
     CONF_THINKING_LEVEL,
     CONF_TRANSCRIBE_GEMINI,
     CONF_TRANSCRIBE_GPT,
+    CONF_VERTEX_CREDENTIALS,
+    CONF_VERTEX_LOCATION,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
     DEFAULT_SYSTEM_INSTRUCTION,
@@ -46,6 +49,8 @@ from .const import (
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
     PROVIDER_QWEN,
+    PROVIDER_VERTEX,
+    VERTEX_DEFAULT_LOCATION,
     CONF_TRANSCRIBE_QWEN,
     QWEN_SUPPORTED_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -82,6 +87,7 @@ async def async_setup_entry(
     entity_class = {
         PROVIDER_OPENAI: GPTRealtimeConversationAgent,
         PROVIDER_QWEN: QwenRealtimeConversationAgent,
+        PROVIDER_VERTEX: VertexGeminiConversationAgent,
     }.get(provider, GeminiLiveConversationAgent)
     async_add_entities([entity_class(hass, config_entry)])
 
@@ -111,9 +117,18 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         self._name = self.integration_name
         self._unique_id = f"{entry.entry_id}_conversation"
 
-    async def _async_create_client(self, api_key: str) -> Any:
+    async def _async_create_client(self, api_key: Any) -> Any:
         """Create the selected provider adapter."""
         raise NotImplementedError
+
+    def _credentials(self, config: dict[str, Any]) -> Any:
+        """Return the stored credentials for the selected provider."""
+        return config.get(CONF_API_KEY)
+
+    @staticmethod
+    def _api_error_message(exc: BaseException) -> str | None:
+        """Return user-visible API errors the user can resolve."""
+        return _user_visible_api_error(exc)
 
     def _ensure_unique_tts_placeholder(self, assistant_text: str) -> str:
         """Make the placeholder unique so Home Assistant cannot cache a prior turn."""
@@ -274,7 +289,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         conversation_ended = False
         started_at = time.monotonic()
         config = {**self.entry.data, **self.entry.options}
-        api_key = config.get(CONF_API_KEY)
+        api_key = self._credentials(config)
         model = config.get(CONF_MODEL)
         voice = config.get(CONF_VOICE)
         if not api_key:
@@ -453,7 +468,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             )
             return None
         except Exception as exc:  # noqa: BLE001
-            if user_message := _user_visible_api_error(exc):
+            if user_message := self._api_error_message(exc):
                 _report_api_error(
                     self.hass, self.entry, self.integration_domain, user_message
                 )
@@ -625,6 +640,34 @@ class GeminiLiveConversationAgent(LiveModelConversationAgent):
         return await async_create_gemini_client(
             self.hass, api_key, affective_dialog=affective_dialog
         )
+
+
+class VertexGeminiConversationAgent(GeminiLiveConversationAgent):
+    """Handle pipeline handoffs through a Gemini Live session on Vertex AI."""
+
+    integration_name = "Gemini Live (Vertex AI)"
+    error_response = "Sorry, I could not get a response from Gemini Live (Vertex AI)."
+
+    def _credentials(self, config: dict[str, Any]) -> Any:
+        """Return the stored service-account key."""
+        return config.get(CONF_VERTEX_CREDENTIALS)
+
+    async def _async_create_client(self, credentials: Any) -> GeminiLiveClient:
+        """Create the Vertex AI provider adapter."""
+        config = {**self.entry.data, **self.entry.options}
+        return await async_create_vertex_gemini_client(
+            self.hass,
+            credentials,
+            config.get(CONF_VERTEX_LOCATION, VERTEX_DEFAULT_LOCATION),
+            affective_dialog=bool(
+                config.get(CONF_AFFECTIVE_DIALOG, DEFAULT_AFFECTIVE_DIALOG)
+            ),
+        )
+
+    @staticmethod
+    def _api_error_message(exc: BaseException) -> str | None:
+        """Return Google's error text for Vertex AI failures."""
+        return vertex_runtime_error_message(exc)
 
 
 class GPTRealtimeConversationAgent(LiveModelConversationAgent):

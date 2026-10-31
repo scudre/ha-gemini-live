@@ -35,6 +35,25 @@ PROVIDER_GEMINI = "gemini"
 PROVIDER_OPENAI = "openai"
 PROVIDER_PERSONAPLEX = "personaplex"
 PROVIDER_QWEN = "qwen"
+PROVIDER_VERTEX = "vertex"
+CONF_VERTEX_CREDENTIALS = "vertex_credentials"
+CONF_VERTEX_KEY_FILE = "vertex_key_file"
+CONF_VERTEX_LOCATION = "vertex_location"
+VERTEX_DEFAULT_LOCATION = "us"
+VERTEX_LOCATIONS = [
+    VERTEX_DEFAULT_LOCATION,
+    "eu",
+    "global",
+    "us-central1",
+    "us-east4",
+    "europe-west4",
+    "asia-northeast1",
+]
+VERTEX_DEFAULT_MODEL = "gemini-3.8-live"
+VERTEX_AVAILABLE_MODELS = [
+    VERTEX_DEFAULT_MODEL,
+    "gemini-live-2.5-flash-native-audio",
+]
 CONF_TRANSCRIBE_QWEN = "transcribe_qwen"
 QWEN_REALTIME_URL = "wss://maas.qwencloudapi.com/api-ws/v1/realtime"
 QWEN_DEFAULT_MODEL = "qwen3.8-omni-flash-realtime"
@@ -54,6 +73,11 @@ QWEN_DEFAULT_VOICE = "Tina"
 QWEN_AVAILABLE_VOICES = [
     "Tina", "Cindy", "Serena", "Ryan", "Jennifer", "Katerina", "Aiden", "Mione",
 ]
+
+
+def is_google_provider(provider: str | None) -> bool:
+    """Both Google backends (AI Studio and Vertex AI) use the Gemini adapter."""
+    return provider in (PROVIDER_GEMINI, PROVIDER_VERTEX)
 
 
 def qwen_supports_tools(model: str | None) -> bool:

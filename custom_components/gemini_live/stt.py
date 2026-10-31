@@ -36,6 +36,11 @@ from homeassistant.helpers.issue_registry import (
 
 from .compat import supports_tts_interruption
 from .gemini import GeminiLiveClient, async_create_gemini_client
+from .vertex import (
+    VERTEX_RUNTIME_ERROR_PREFIX,
+    async_create_vertex_gemini_client,
+    vertex_runtime_error_message,
+)
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
@@ -52,6 +57,8 @@ from .const import (
     CONF_THINKING_LEVEL,
     CONF_TRANSCRIBE_GEMINI,
     CONF_TRANSCRIBE_GPT,
+    CONF_VERTEX_CREDENTIALS,
+    CONF_VERTEX_LOCATION,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
     DEFAULT_RESPONSE_TIMEOUT,
@@ -71,6 +78,8 @@ from .const import (
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
     PROVIDER_QWEN,
+    PROVIDER_VERTEX,
+    VERTEX_DEFAULT_LOCATION,
     CONF_TRANSCRIBE_QWEN,
     QWEN_SUPPORTED_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -162,6 +171,7 @@ _OPENAI_NO_CREDITS_USER_MESSAGE = (
 
 _QUOTA_ERROR_MARKER = "you exceeded your current quota"
 _QUOTA_URL = "https://ai.dev/rate-limit"
+_VERTEX_CONSOLE_URL = "https://console.cloud.google.com/vertex-ai"
 _QUOTA_USER_MESSAGE = (
     "Gemini Live is unavailable because your Google AI project has exceeded "
     "an API quota. Please check your project's API limits, usage, and billing "
@@ -253,11 +263,27 @@ def _openai_no_credits_issue_id(entry_id: str) -> str:
     return f"{_OPENAI_NO_CREDITS_ISSUE_PREFIX}_{entry_id}"
 
 
+def _vertex_issue_id(entry_id: str) -> str:
+    """Return the Vertex AI Repairs issue ID for one config entry."""
+    return f"vertex_api_error_{entry_id}"
+
+
 def _report_api_error(
     hass: HomeAssistant, entry: ConfigEntry, domain: str, user_message: str
 ) -> None:
     """Create the same actionable Repairs issue for voice and typed requests."""
-    if user_message == _SPENDING_CAP_USER_MESSAGE:
+    extra_placeholders: dict[str, str] = {}
+    if user_message.startswith(VERTEX_RUNTIME_ERROR_PREFIX):
+        issue_id = _vertex_issue_id(entry.entry_id)
+        issue_url = _VERTEX_CONSOLE_URL
+        translation_key = "vertex_api_error"
+        url_placeholder = None
+        extra_placeholders["error"] = getattr(
+            user_message,
+            "error_detail",
+            user_message.removeprefix(VERTEX_RUNTIME_ERROR_PREFIX),
+        )
+    elif user_message == _SPENDING_CAP_USER_MESSAGE:
         issue_id = _spending_cap_issue_id(entry.entry_id)
         issue_url = _SPENDING_CAP_URL
         translation_key = "spending_cap_exceeded"
@@ -288,7 +314,8 @@ def _report_api_error(
         translation_key=translation_key,
         translation_placeholders={
             "entry_title": entry.title,
-            url_placeholder: issue_url,
+            **({url_placeholder: issue_url} if url_placeholder else {}),
+            **extra_placeholders,
         },
     )
 
@@ -299,6 +326,7 @@ def _clear_api_issues(hass: HomeAssistant, entry: ConfigEntry, domain: str) -> N
         _spending_cap_issue_id(entry.entry_id),
         _prepayment_credits_issue_id(entry.entry_id),
         _openai_no_credits_issue_id(entry.entry_id),
+        _vertex_issue_id(entry.entry_id),
         f"quota_exceeded_{entry.entry_id}",
     ):
         async_delete_issue(hass, domain, issue_id)
@@ -471,7 +499,11 @@ async def async_setup_entry(
     """Set up the selected realtime provider's STT platform."""
     config = {**config_entry.data, **config_entry.options}
     provider = config.get(CONF_PROVIDER, PROVIDER_GEMINI)
-    entity_class = {PROVIDER_OPENAI: GPTRealtimeSTT, PROVIDER_QWEN: QwenRealtimeSTT}.get(provider, GeminiLiveSTT)
+    entity_class = {
+        PROVIDER_OPENAI: GPTRealtimeSTT,
+        PROVIDER_QWEN: QwenRealtimeSTT,
+        PROVIDER_VERTEX: VertexGeminiSTT,
+    }.get(provider, GeminiLiveSTT)
     async_add_entities([entity_class(config_entry)])
 
 
@@ -501,9 +533,13 @@ class LiveModelSTT(SpeechToTextEntity):
         self._attr_name = self.integration_name
         self._attr_unique_id = f"{entry.entry_id}_stt"
 
-    async def _async_create_client(self, api_key: str) -> Any:
+    async def _async_create_client(self, api_key: Any) -> Any:
         """Create the selected provider adapter."""
         raise NotImplementedError
+
+    def _credentials(self, config: dict[str, Any]) -> Any:
+        """Return the stored credentials for the selected provider."""
+        return config.get(CONF_API_KEY)
 
     @staticmethod
     def _api_error_message(exc: BaseException) -> str | None:
@@ -1593,7 +1629,7 @@ class LiveModelSTT(SpeechToTextEntity):
         """Send the audio stream directly to the configured live model."""
         turn_id = uuid4().hex[:8]
         config = {**self.entry.data, **self.entry.options}
-        api_key = config.get(CONF_API_KEY)
+        api_key = self._credentials(config)
         model = config.get(CONF_MODEL)
         voice = config.get(CONF_VOICE)
         custom_instruction = config.get(CONF_SYSTEM_INSTRUCTION, "")
@@ -1667,6 +1703,33 @@ class GeminiLiveSTT(LiveModelSTT):
     def _api_error_message(exc: BaseException) -> str | None:
         """Return Google billing errors that the user can resolve."""
         return _user_visible_api_error(exc)
+
+
+class VertexGeminiSTT(GeminiLiveSTT):
+    """Stream a Home Assistant voice turn through Gemini Live on Vertex AI."""
+
+    integration_name = "Gemini Live (Vertex AI)"
+
+    def _credentials(self, config: dict[str, Any]) -> Any:
+        """Return the stored service-account key."""
+        return config.get(CONF_VERTEX_CREDENTIALS)
+
+    async def _async_create_client(self, credentials: Any) -> GeminiLiveClient:
+        """Create the Vertex AI provider adapter."""
+        config = {**self.entry.data, **self.entry.options}
+        return await async_create_vertex_gemini_client(
+            self.hass,
+            credentials,
+            config.get(CONF_VERTEX_LOCATION, VERTEX_DEFAULT_LOCATION),
+            affective_dialog=bool(
+                config.get(CONF_AFFECTIVE_DIALOG, DEFAULT_AFFECTIVE_DIALOG)
+            ),
+        )
+
+    @staticmethod
+    def _api_error_message(exc: BaseException) -> str | None:
+        """Return Google's error text for Vertex AI failures."""
+        return vertex_runtime_error_message(exc)
 
 
 class GPTRealtimeSTT(LiveModelSTT):

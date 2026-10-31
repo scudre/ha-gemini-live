@@ -4,6 +4,7 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.const import CONF_LLM_HASS_API
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm, selector
@@ -58,15 +59,34 @@ from .const import (
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
     PROVIDER_PERSONAPLEX,
+    PROVIDER_VERTEX,
     THINKING_LEVELS,
+    CONF_VERTEX_CREDENTIALS,
+    CONF_VERTEX_KEY_FILE,
+    CONF_VERTEX_LOCATION,
+    VERTEX_AVAILABLE_MODELS,
+    VERTEX_DEFAULT_LOCATION,
+    VERTEX_DEFAULT_MODEL,
+    VERTEX_LOCATIONS,
+    is_google_provider,
     supports_affective_dialog,
     supports_thinking_level,
 )
+from .vertex import (
+    VertexKeyError,
+    async_validate_vertex_connection,
+    parse_service_account_key,
+)
+
+VERTEX_PROVIDER_NAME = "Google Vertex AI"
 
 PROVIDER_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
         options=[
             selector.SelectOptionDict(value=PROVIDER_GEMINI, label="Google Gemini"),
+            selector.SelectOptionDict(
+                value=PROVIDER_VERTEX, label=VERTEX_PROVIDER_NAME
+            ),
             selector.SelectOptionDict(value=PROVIDER_OPENAI, label="OpenAI"),
             selector.SelectOptionDict(value=PROVIDER_QWEN, label="QwenCloud"),
             selector.SelectOptionDict(
@@ -78,14 +98,17 @@ PROVIDER_SELECTOR = selector.SelectSelector(
 )
 
 
-def _model_selector(models: list[str]) -> selector.SelectSelector:
+def _model_selector(
+    models: list[str], custom_value: bool = False
+) -> selector.SelectSelector:
     """Return a compact dropdown for a provider's model choices."""
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=models,
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
+    config = selector.SelectSelectorConfig(
+        options=models,
+        mode=selector.SelectSelectorMode.DROPDOWN,
     )
+    if custom_value:
+        config["custom_value"] = True
+    return selector.SelectSelector(config)
 
 
 GEMINI_VOICE_SELECTOR = selector.SelectSelector(
@@ -137,6 +160,7 @@ def _provider_schema(
     is_qwen = provider == PROVIDER_QWEN
     is_openai = provider == PROVIDER_OPENAI
     is_personaplex = provider == PROVIDER_PERSONAPLEX
+    is_vertex = provider == PROVIDER_VERTEX
     models = (
         QWEN_AVAILABLE_MODELS
         if is_qwen
@@ -183,17 +207,47 @@ def _provider_schema(
         DEFAULT_TRANSCRIBE_GPT if is_openai else DEFAULT_TRANSCRIBE_GEMINI
     )
 
-    api_key_field = (
-        vol.Required(CONF_API_KEY, default=current[CONF_API_KEY])
-        if CONF_API_KEY in current
-        else vol.Required(CONF_API_KEY)
-    )
-    fields: dict[vol.Marker, Any] = {
-        api_key_field: str,
-        vol.Required(
-            CONF_MODEL,
-            default=current.get(CONF_MODEL, default_model),
-        ): _model_selector(models),
+    fields: dict[vol.Marker, Any] = {}
+    if is_vertex:
+        # The project comes from the key; a stored key makes the upload optional.
+        key_file_marker = (
+            vol.Optional if current.get(CONF_VERTEX_CREDENTIALS) else vol.Required
+        )
+        fields[key_file_marker(CONF_VERTEX_KEY_FILE)] = selector.FileSelector(
+            selector.FileSelectorConfig(accept=".json,application/json")
+        )
+        fields[
+            vol.Required(
+                CONF_VERTEX_LOCATION,
+                default=current.get(CONF_VERTEX_LOCATION, VERTEX_DEFAULT_LOCATION),
+            )
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=VERTEX_LOCATIONS,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                custom_value=True,
+            )
+        )
+        fields[
+            vol.Required(
+                CONF_MODEL,
+                default=current.get(CONF_MODEL, VERTEX_DEFAULT_MODEL),
+            )
+        ] = _model_selector(VERTEX_AVAILABLE_MODELS, custom_value=True)
+    else:
+        api_key_field = (
+            vol.Required(CONF_API_KEY, default=current[CONF_API_KEY])
+            if CONF_API_KEY in current
+            else vol.Required(CONF_API_KEY)
+        )
+        fields[api_key_field] = str
+        fields[
+            vol.Required(
+                CONF_MODEL,
+                default=current.get(CONF_MODEL, default_model),
+            )
+        ] = _model_selector(models)
+    fields |= {
         vol.Required(
             CONF_VOICE,
             default=current.get(CONF_VOICE, default_voice),
@@ -251,7 +305,7 @@ def _provider_schema(
         ] = selector.SelectSelector(
             selector.SelectSelectorConfig(options=apis, multiple=True)
         )
-    if provider == PROVIDER_GEMINI:
+    if is_google_provider(provider):
         # All Gemini Live models offered by this integration support Google's
         # server-side Search grounding tool. It is a separate, opt-in
         # preference from the former Assist search-tool prompt hint.
@@ -291,7 +345,7 @@ def _provider_schema(
     # models that support it; Home Assistant config forms cannot render a
     # disabled field, so it is hidden instead.
     if (
-        provider == PROVIDER_GEMINI
+        is_google_provider(provider)
         and supports_affective_dialog(current.get(CONF_MODEL))
     ):
         fields[
@@ -304,7 +358,7 @@ def _provider_schema(
             )
         ] = selector.BooleanSelector()
     if (
-        provider == PROVIDER_GEMINI
+        is_google_provider(provider)
         and supports_thinking_level(current.get(CONF_MODEL))
     ):
         fields[
@@ -341,10 +395,70 @@ def _needs_model_specific_refresh(user_input: dict[str, Any]) -> bool:
     ) or (supports_affective_dialog(model) and CONF_AFFECTIVE_DIALOG not in user_input)
 
 
+def _read_uploaded_file(hass: HomeAssistant, file_id: str) -> bytes:
+    """Read an uploaded file once; Home Assistant deletes it afterwards."""
+    with process_uploaded_file(hass, file_id) as path:
+        return path.read_bytes()
+
+
+async def _async_read_vertex_key(
+    hass: HomeAssistant,
+    user_input: dict[str, Any],
+    stored_credentials: dict[str, Any] | None,
+) -> str | None:
+    """Put the uploaded or stored key into user_input; return an error key."""
+    if file_id := user_input.pop(CONF_VERTEX_KEY_FILE, None):
+        try:
+            raw = await hass.async_add_executor_job(
+                _read_uploaded_file, hass, file_id
+            )
+            user_input[CONF_VERTEX_CREDENTIALS] = parse_service_account_key(raw)
+        except VertexKeyError as err:
+            return err.reason
+        except (OSError, ValueError):
+            return "invalid_key_file"
+    else:
+        user_input[CONF_VERTEX_CREDENTIALS] = stored_credentials
+    if CONF_VERTEX_LOCATION in user_input:
+        user_input[CONF_VERTEX_LOCATION] = str(user_input[CONF_VERTEX_LOCATION]).strip()
+    return None
+
+
+async def _async_check_vertex_connection(
+    hass: HomeAssistant,
+    user_input: dict[str, Any],
+    current: dict[str, Any] | None,
+) -> str | None:
+    """Check the Vertex AI connection unless nothing it depends on changed."""
+    keys = (CONF_VERTEX_CREDENTIALS, CONF_VERTEX_LOCATION, CONF_MODEL)
+    if current is not None and all(
+        user_input.get(key) == current.get(key) for key in keys
+    ):
+        return None
+    return await async_validate_vertex_connection(
+        hass,
+        user_input[CONF_VERTEX_CREDENTIALS],
+        user_input[CONF_VERTEX_LOCATION],
+        user_input[CONF_MODEL],
+    )
+
+
+def _vertex_form_values(
+    user_input: dict[str, Any], credentials: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Return form values that keep an already provided key."""
+    values = {**user_input}
+    values.pop(CONF_VERTEX_KEY_FILE, None)
+    if credentials:
+        values[CONF_VERTEX_CREDENTIALS] = credentials
+    return values
+
+
 class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a realtime voice provider."""
 
     VERSION = 1
+    _vertex_credentials: dict[str, Any] | None = None
 
     async def async_step_user(self, user_input=None):
         """Select the live model provider."""
@@ -371,7 +485,23 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Collect settings for the selected provider."""
         selected_provider = provider or self.context[CONF_PROVIDER]
         self.context[CONF_PROVIDER] = selected_provider
+        is_vertex = selected_provider == PROVIDER_VERTEX
         if user_input is not None:
+            if is_vertex:
+                if error := await _async_read_vertex_key(
+                    self.hass, user_input, self._vertex_credentials
+                ):
+                    return self.async_show_form(
+                        step_id="provider",
+                        data_schema=_provider_schema(
+                            selected_provider,
+                            _vertex_form_values(user_input, self._vertex_credentials),
+                            self.hass,
+                        ),
+                        errors={"base": error},
+                        description_placeholders={"provider": VERTEX_PROVIDER_NAME},
+                    )
+                self._vertex_credentials = user_input[CONF_VERTEX_CREDENTIALS]
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="provider",
@@ -379,16 +509,35 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         selected_provider, user_input, self.hass
                     ),
                     description_placeholders={
-                        "provider": "Google Gemini",
+                        "provider": (
+                            VERTEX_PROVIDER_NAME if is_vertex else "Google Gemini"
+                        ),
                     },
                 )
             user_input = _strip_unsupported_settings(user_input)
+            if is_vertex and (
+                error := await _async_check_vertex_connection(
+                    self.hass, user_input, None
+                )
+            ):
+                return self.async_show_form(
+                    step_id="provider",
+                    data_schema=_provider_schema(
+                        selected_provider, user_input, self.hass
+                    ),
+                    errors={"base": "cannot_connect"},
+                    description_placeholders={
+                        "provider": VERTEX_PROVIDER_NAME,
+                        "error": error,
+                    },
+                )
             user_input[CONF_PROVIDER] = selected_provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
             title = {
                 PROVIDER_OPENAI: "GPT Realtime",
                 PROVIDER_QWEN: "Qwen Realtime",
                 PROVIDER_PERSONAPLEX: "PersonaPlex",
+                PROVIDER_VERTEX: "Gemini Live (Vertex AI)",
             }.get(selected_provider, "Gemini Live")
             return self.async_create_entry(title=title, data=user_input)
         return self.async_show_form(
@@ -399,6 +548,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     PROVIDER_OPENAI: "OpenAI",
                     PROVIDER_QWEN: "QwenCloud",
                     PROVIDER_PERSONAPLEX: "fal.ai PersonaPlex",
+                    PROVIDER_VERTEX: VERTEX_PROVIDER_NAME,
                 }.get(selected_provider, "Google Gemini")
             },
         )
@@ -408,13 +558,42 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         config = {**entry.data, **entry.options}
         provider = _provider(config)
+        is_vertex = provider == PROVIDER_VERTEX
         if user_input is not None:
+            if is_vertex:
+                credentials = self._vertex_credentials or config.get(
+                    CONF_VERTEX_CREDENTIALS
+                )
+                if error := await _async_read_vertex_key(
+                    self.hass, user_input, credentials
+                ):
+                    return self.async_show_form(
+                        step_id="reconfigure",
+                        data_schema=_provider_schema(
+                            provider,
+                            _vertex_form_values(user_input, credentials),
+                            self.hass,
+                        ),
+                        errors={"base": error},
+                    )
+                self._vertex_credentials = user_input[CONF_VERTEX_CREDENTIALS]
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="reconfigure",
                     data_schema=_provider_schema(provider, user_input, self.hass),
                 )
             user_input = _strip_unsupported_settings(user_input)
+            if is_vertex and (
+                error := await _async_check_vertex_connection(
+                    self.hass, user_input, config
+                )
+            ):
+                return self.async_show_form(
+                    step_id="reconfigure",
+                    data_schema=_provider_schema(provider, user_input, self.hass),
+                    errors={"base": "cannot_connect"},
+                    description_placeholders={"error": error},
+                )
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
             return self.async_update_reload_and_abort(
@@ -439,17 +618,48 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class GeminiLiveOptionsFlowHandler(config_entries.OptionsFlow):
     """Manage live provider options."""
 
+    _vertex_credentials: dict[str, Any] | None = None
+
     async def async_step_init(self, user_input=None):
         """Update the provider's connection and response settings."""
         config = {**self.config_entry.data, **self.config_entry.options}
         provider = _provider(config)
+        is_vertex = provider == PROVIDER_VERTEX
         if user_input is not None:
+            if is_vertex:
+                credentials = self._vertex_credentials or config.get(
+                    CONF_VERTEX_CREDENTIALS
+                )
+                if error := await _async_read_vertex_key(
+                    self.hass, user_input, credentials
+                ):
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=_provider_schema(
+                            provider,
+                            _vertex_form_values(user_input, credentials),
+                            self.hass,
+                        ),
+                        errors={"base": error},
+                    )
+                self._vertex_credentials = user_input[CONF_VERTEX_CREDENTIALS]
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="init",
                     data_schema=_provider_schema(provider, user_input, self.hass),
                 )
             user_input = _strip_unsupported_settings(user_input)
+            if is_vertex and (
+                error := await _async_check_vertex_connection(
+                    self.hass, user_input, config
+                )
+            ):
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=_provider_schema(provider, user_input, self.hass),
+                    errors={"base": "cannot_connect"},
+                    description_placeholders={"error": error},
+                )
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
             return self.async_create_entry(title="", data=user_input)
